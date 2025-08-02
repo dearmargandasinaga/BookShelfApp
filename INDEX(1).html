@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bookshelf App</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body.dark {
+      background-color: #121212;
+      color: #e0e0e0;
+    }
+    .dark .card {
+      background-color: #1e1e1e;
+      color: white;
+    }
+    .highlight {
+      background-color: yellow;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2>📚 My Bookshelf</h2>
+      <button class="btn btn-outline-secondary" id="toggleDarkMode">🌓 Theme</button>
+    </div>
+
+    <form id="bookForm" class="row g-3">
+      <div class="col-md-3">
+        <input type="text" class="form-control" id="titleInput" placeholder="Book Title" required>
+      </div>
+      <div class="col-md-2">
+        <input type="text" class="form-control" id="authorInput" placeholder="Author" required>
+      </div>
+      <div class="col-md-2">
+        <select class="form-select" id="statusInput">
+          <option value="unread">Unread</option>
+          <option value="reading">Reading</option>
+          <option value="finished">Finished</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <input type="date" class="form-control" id="dateInput" required>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button type="submit" class="btn btn-primary">Add Book</button>
+      </div>
+    </form>
+
+    <div class="my-4 d-flex gap-2">
+      <input type="text" id="searchInput" class="form-control" placeholder="Search by title or author...">
+      <button class="btn btn-outline-success" onclick="exportBooks()">Export JSON</button>
+      <input type="file" id="importFile" class="form-control" accept="application/json"/>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" id="filterTabs">
+      <li class="nav-item"><button class="nav-link active" data-filter="all">All</button></li>
+      <li class="nav-item"><button class="nav-link" data-filter="unread">Unread</button></li>
+      <li class="nav-item"><button class="nav-link" data-filter="reading">Reading</button></li>
+      <li class="nav-item"><button class="nav-link" data-filter="finished">Finished</button></li>
+    </ul>
+
+    <div id="bookList" class="row row-cols-1 row-cols-md-2 g-4"></div>
+  </div>
+
+  <script>
+    const bookForm = document.getElementById("bookForm");
+    const titleInput = document.getElementById("titleInput");
+    const authorInput = document.getElementById("authorInput");
+    const statusInput = document.getElementById("statusInput");
+    const dateInput = document.getElementById("dateInput");
+    const bookList = document.getElementById("bookList");
+    const searchInput = document.getElementById("searchInput");
+    const filterTabs = document.querySelectorAll("#filterTabs button");
+    const toggleDarkMode = document.getElementById("toggleDarkMode");
+    const importFile = document.getElementById("importFile");
+
+    let books = JSON.parse(localStorage.getItem("bookshelf")) || [];
+    let currentFilter = "all";
+
+    function renderBooks() {
+      bookList.innerHTML = "";
+      const search = searchInput.value.toLowerCase();
+      books
+        .filter(book => {
+          return (
+            (currentFilter === "all" || book.status === currentFilter) &&
+            (book.title.toLowerCase().includes(search) || book.author.toLowerCase().includes(search))
+          );
+        })
+        .forEach((book, index) => {
+          const card = document.createElement("div");
+          card.className = "col";
+          card.innerHTML = `
+            <div class="card h-100 shadow-sm">
+              <div class="card-body">
+                <h5 class="card-title">${highlight(book.title)}</h5>
+                <p class="card-text">by ${highlight(book.author)}</p>
+                <p class="card-text"><small class="text-muted">Read on: ${book.date}</small></p>
+                <span class="badge bg-${getStatusColor(book.status)}">${capitalize(book.status)}</span>
+                <div class="mt-2">
+                  <button class="btn btn-sm btn-danger" onclick="deleteBook(${index})">Delete</button>
+                </div>
+              </div>
+            </div>`;
+          bookList.appendChild(card);
+        });
+    }
+
+    function getStatusColor(status) {
+      return status === "unread" ? "secondary" : status === "reading" ? "warning" : "success";
+    }
+
+    function capitalize(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+
+    function highlight(text) {
+      const search = searchInput.value.toLowerCase();
+      if (!search) return text;
+      const regex = new RegExp(`(${search})`, "gi");
+      return text.replace(regex, '<span class="highlight">$1</span>');
+    }
+
+    function deleteBook(index) {
+      if (!confirm("Are you sure you want to delete this book?")) return;
+      books.splice(index, 1);
+      updateBooks();
+    }
+
+    function updateBooks() {
+      localStorage.setItem("bookshelf", JSON.stringify(books));
+      renderBooks();
+    }
+
+    bookForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const title = titleInput.value.trim();
+      const author = authorInput.value.trim();
+      const date = dateInput.value;
+
+      if (!title || !author || !date) {
+        alert("Please fill in all fields.");
+        return;
+      }
+
+      const isDuplicate = books.some(book =>
+        book.title.toLowerCase() === title.toLowerCase() &&
+        book.author.toLowerCase() === author.toLowerCase()
+      );
+
+      if (isDuplicate) {
+        alert("This book already exists.");
+        return;
+      }
+
+      books.push({ title, author, status: statusInput.value, date });
+      bookForm.reset();
+      updateBooks();
+    });
+
+    searchInput.addEventListener("input", renderBooks);
+
+    filterTabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        filterTabs.forEach(btn => btn.classList.remove("active"));
+        tab.classList.add("active");
+        currentFilter = tab.getAttribute("data-filter");
+        renderBooks();
+      });
+    });
+
+    toggleDarkMode.addEventListener("click", () => {
+      document.body.classList.toggle("dark");
+      localStorage.setItem("theme", document.body.classList.contains("dark") ? "dark" : "light");
+    });
+
+    function exportBooks() {
+      const blob = new Blob([JSON.stringify(books, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "bookshelf.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    importFile.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const imported = JSON.parse(e.target.result);
+          if (Array.isArray(imported)) {
+            books = imported;
+            updateBooks();
+          } else {
+            alert("Invalid file format.");
+          }
+        } catch {
+          alert("Error reading file.");
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    if (localStorage.getItem("theme") === "dark") {
+      document.body.classList.add("dark");
+    }
+
+    renderBooks();
+  </script>
+</body>
+</html>
